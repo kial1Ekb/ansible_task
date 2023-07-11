@@ -1,0 +1,4 @@
+[app]
+app_host ansible_user=user ansible_ssh_private_key_file=/path/to/file
+[db]
+db_host ansible_user=user ansible_ssh_private_key_file=/path/to/file

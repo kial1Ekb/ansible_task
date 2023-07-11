@@ -1,0 +1,42 @@
+---
+- hosts: app
+  become: yes
+  vars:
+    db_host: "{{ lookup('env','DB_USER') }}"
+    your_db_user: "{{ lookup('env','DB_USER') }}"
+  tasks:
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+        update_cache: yes
+
+    - name: Remove default nginx configuration
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Add nginx configuration
+      copy:
+        src: /root/nginx/nginx.conf
+        dest: /etc/nginx/sites-available/
+        remote_src: yes
+      notify: Reload nginx
+
+    - name: Install PostgreSQL client
+      apt:
+        name: postgresql-client
+        state: present
+        update_cache: yes
+
+    - name: Test database connection
+      command: psql -h {{ db_host }} -U {{ your_db_user }} -c '\q'
+      register: result
+      failed_when: "'could not connect to server' in result.stderr"
+      changed_when: false
+
+  handlers:
+    - name: Reload nginx
+      systemd:
+        name: nginx
+        state: reloaded

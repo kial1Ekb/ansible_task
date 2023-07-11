@@ -1,0 +1,62 @@
+---
+- hosts: db
+  become: yes
+  vars:
+    db_user: "{{ lookup('env','DB_USER') }}"
+    db_password: "{{ lookup('env','DB_PASSWORD') }}"
+    postgres_password: "{{ lookup('env','POSTGRES_PASSWORD') }}"
+    app_host: "{{ lookup('env','APP_HOST') }}"
+  tasks:
+    - name: Install necessary packages
+      apt:
+        name:
+          - python3-pip
+          - python3-psycopg2
+          - libpq-dev
+          - psycopg2
+        state: present
+        update_cache: yes
+
+    - name: Install PostgreSQL
+      apt:
+        name: postgresql
+        state: present
+        update_cache: yes
+
+    - name: Ensure the PostgreSQL service is running
+      systemd:
+        name: postgresql
+        state: started
+        enabled: yes
+
+    - name: Set postgres password
+      shell: sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD '{{ postgres_password }}';"
+      args:
+        executable: /bin/bash
+
+    - name: Configure postgres to use password authentication
+      lineinfile:
+        path: /etc/postgresql/12/main/pg_hba.conf
+        regexp: '^local\s+all\s+postgres\s'
+        line: 'local   all             postgres                                md5'
+      notify: Reload postgresql
+
+    - name: Create database user
+      postgresql_user:
+        name: "{{ db_user }}"
+        password: "{{ db_password }}"
+        login_host: localhost
+        login_user: postgres
+        login_password: "{{ postgres_password }}"
+
+    - name: Allow app server to access the db
+      lineinfile:
+        path: /etc/postgresql/12/main/pg_hba.conf
+        line: "host all {{ db_user }} <app_host>/32 md5"
+      notify: Reload postgresql
+
+  handlers:
+    - name: Reload postgresql
+      systemd:
+        name: postgresql
+        state: reloaded
